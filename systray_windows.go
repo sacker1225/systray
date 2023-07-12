@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package systray
@@ -202,6 +203,9 @@ type winTray struct {
 
 	wmSystrayMessage,
 	wmTaskbarCreated uint32
+
+	lClickHandle func() error
+	rClickHandle func() error
 }
 
 // Loads an image from file and shows it in tray.
@@ -277,8 +281,10 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		systrayExit()
 	case t.wmSystrayMessage:
 		switch lParam {
-		case WM_RBUTTONUP, WM_LBUTTONUP:
-			t.showMenu()
+		case WM_LBUTTONUP:
+			t.lClickHandle()
+		case WM_RBUTTONUP:
+			t.rClickHandle()
 		}
 	case t.wmTaskbarCreated: // on explorer.exe restarts
 		t.muNID.Lock()
@@ -334,6 +340,8 @@ func (t *winTray) initInstance() error {
 	t.menus = make(map[uint32]windows.Handle)
 	t.menuOf = make(map[uint32]windows.Handle)
 	t.menuItemIcons = make(map[uint32]windows.Handle)
+	t.lClickHandle = func() error { return nil }
+	t.rClickHandle = t.showMenu
 
 	taskbarEventNamePtr, _ := windows.UTF16PtrFromString("TaskbarCreated")
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644947
@@ -904,6 +912,20 @@ func SetTooltip(tooltip string) {
 	if err := wt.setTooltip(tooltip); err != nil {
 		log.Errorf("Unable to set tooltip: %v", err)
 		return
+	}
+}
+
+// SetLClickHandle sets the systray left mouse click callback,
+func SetLClickHandle(callback func() error) {
+	if callback != nil {
+		wt.lClickHandle = callback
+	}
+}
+
+// SetRClickHandle sets the systray right mouse click callback,
+func SetRClickHandle(callback func() error) {
+	if callback != nil {
+		wt.rClickHandle = callback
 	}
 }
 
